@@ -368,7 +368,7 @@ export default function Home() {
                     <div className="bg-white p-6 rounded-lg shadow-lg text-center max-w-md">
                         <h2 className="text-3xl font-bold text-pink-600 mb-4">🎉 Special Midnight Surprise! 🎉</h2>
                         <p className="text-gray-700 font-mono">
-                            You opened this at the perfect time! Here's to celebrating the most magical moments with you. 💖
+                            You opened this at the perfect time! Here&apos;s to celebrating the most magical moments with you. 💖
                         </p>
                         <button
                             onClick={() => setSpecialMessage(false)}
