@@ -5,6 +5,7 @@ import Confetti from "react-confetti";
 import Image from "next/image";
 import Particles from "react-tsparticles";
 import { loadSlim } from "tsparticles-slim";
+import type { Engine } from "tsparticles-engine";
 
 
 const HER_NAME = "Roju";
@@ -12,7 +13,7 @@ const FIRST_BDAY_TOGETHER = new Date("2021-10-04");
 const BIRTHDAY_MONTH = 10;
 const BIRTHDAY_DAY = 4;
 
-const GALLERY_IMAGES = [
+const GALLERY_IMAGES: string[] = [
     "/photos/1.jpeg",
     "/photos/2.jpeg",
     "/photos/2.jpeg",
@@ -35,29 +36,56 @@ function countBirthdaysTogether(firstCelebrationDate: Date, today = new Date()) 
     return count;
 }
 
+function timeUntilNextBirthday(today = new Date()) {
+    // Set the target time to 11:59 PM on October 3rd
+    const targetTime = new Date(today.getFullYear(), BIRTHDAY_MONTH - 1, BIRTHDAY_DAY - 1, 23, 59, 0);
+
+    // If the current time is past the target time, set the target to next year's birthday
+    if (today > targetTime) {
+        targetTime.setFullYear(today.getFullYear() + 1);
+    }
+
+    const ms = targetTime.getTime() - today.getTime(); // Total milliseconds difference
+    const totalSeconds = Math.floor(ms / 1000); // Total full seconds
+    const totalMinutes = Math.floor(totalSeconds / 60); // Total full minutes
+    const totalHours = Math.floor(totalMinutes / 60); // Total full hours
+    const totalDays = Math.floor(totalHours / 24); // Total full days
+
+    const remainingHours = totalHours % 24; // Remaining hours after accounting for full days
+    const remainingMinutes = totalMinutes % 60; // Remaining minutes after accounting for full hours
+    const remainingSeconds = totalSeconds % 60; // Remaining seconds after accounting for full minutes
+
+    return { totalDays, remainingHours, remainingMinutes, remainingSeconds };
+}
 
 function daysUntilNextBirthday(today = new Date()) {
-    const thisYearTarget = new Date(today.getFullYear(), BIRTHDAY_MONTH - 1, BIRTHDAY_DAY);
-    const next = thisYearTarget >= today ? thisYearTarget : new Date(today.getFullYear() + 1, BIRTHDAY_MONTH - 1, BIRTHDAY_DAY);
-    const ms = next - today;
-    return Math.ceil(ms / (1000 * 60 * 60 * 24));
+    const { totalDays } = timeUntilNextBirthday(today);
+    return totalDays;
 }
 
 function hoursUntilNextBirthday(today = new Date()) {
-    const thisYearTarget = new Date(today.getFullYear(), BIRTHDAY_MONTH - 1, BIRTHDAY_DAY);
-    const next = thisYearTarget >= today ? thisYearTarget : new Date(today.getFullYear() + 1, BIRTHDAY_MONTH - 1, BIRTHDAY_DAY);
-    const ms = next - today;
-    return Math.ceil(ms / (1000 * 60 * 60)); // Convert milliseconds to hours
+    const { remainingHours } = timeUntilNextBirthday(today);
+    return remainingHours;
+}
+
+function minutesUntilNextBirthday(today = new Date()) {
+    const { remainingMinutes } = timeUntilNextBirthday(today);
+    return remainingMinutes;
+}
+
+function secondsUntilNextBirthday(today = new Date()) {
+    const { remainingSeconds } = timeUntilNextBirthday(today);
+    return remainingSeconds;
 }
 
 
 // Simple number animation hook
-function useAnimatedNumber(target, duration = 1200) {
+function useAnimatedNumber(target: number, duration = 1200) {
     const [value, setValue] = useState(0);
     useEffect(() => {
         const start = performance.now();
         let raf: number;
-        const step = (ts) => {
+        const step = (ts: number) => {
             const p = Math.min(1, (ts - start) / duration);
             setValue(Math.round(p * target));
             if (p < 1) raf = requestAnimationFrame(step);
@@ -70,24 +98,24 @@ function useAnimatedNumber(target, duration = 1200) {
 
 function MusicButton() {
     const [playing, setPlaying] = useState(false);
-    const audioRef = useRef(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null); // Explicitly type the ref
 
     useEffect(() => {
-        // create audio on mount
+        // Create audio on mount
         const audio = new Audio("/music/bg.mp3");
         audio.loop = true;
         audioRef.current = audio;
-        return () => audio.pause();
+        return () => audio.pause(); // Cleanup on unmount
     }, []);
 
     const toggle = () => {
         const audio = audioRef.current;
-        if (!audio) return;
+        if (!audio) return; // Ensure audio exists
         if (playing) {
             audio.pause();
             setPlaying(false);
         } else {
-            audio.play().catch(() => { });
+            audio.play().catch(() => {}); // Handle play errors
             setPlaying(true);
         }
     };
@@ -103,11 +131,16 @@ function MusicButton() {
     );
 }
 
-function ThemeToggle({ dark, setDark }) {
+interface ThemeToggleProps {
+    dark: boolean;
+    setDark: (value: boolean) => void;
+}
+
+function ThemeToggle({ dark, setDark }: ThemeToggleProps) {
     return (
         <button
             onClick={() => setDark(!dark)}
-            className="fixed top-5 right-5 z-50 p-3 rounded-full bg-purple-500 text-white shadow-lg hover:bg-purple-600"
+            className="fixed sm:top-5 top-16 right-5 z-50 p-3 rounded-full bg-purple-500 text-white shadow-lg hover:bg-purple-600"
             aria-label="Toggle theme"
         >
             {dark ? "☀️" : "🌙"}
@@ -117,7 +150,7 @@ function ThemeToggle({ dark, setDark }) {
 
 
 function FloatingHearts() {
-    const init = async (engine) => {
+    const init = async (engine: Engine) => {
         await loadSlim(engine);
     };
     return (
@@ -274,11 +307,35 @@ function ParallaxLayer() {
 export default function Home() {
     const [showConfetti, setShowConfetti] = useState(false);
     const [dark, setDark] = useState(false);
+    const [specialMessage, setSpecialMessage] = useState(false); // State for special message
 
     const birthdaysCount = useMemo(() => countBirthdaysTogether(FIRST_BDAY_TOGETHER), []);
     const animatedCount = useAnimatedNumber(birthdaysCount);
-    const daysLeft = daysUntilNextBirthday();
-    const hoursLeft = hoursUntilNextBirthday();
+
+    // State for live countdown
+    const [timeLeft, setTimeLeft] = useState(timeUntilNextBirthday());
+
+    useEffect(() => {
+        // Update the countdown every second
+        const interval = setInterval(() => {
+            setTimeLeft(timeUntilNextBirthday());
+        }, 1000);
+
+        return () => clearInterval(interval); // Cleanup on unmount
+    }, []);
+
+    useEffect(() => {
+        // Check if the current time is October 3rd at midnight
+        const now = new Date();
+        if (
+            now.getMonth() === 9 && // October (0-based index)
+            now.getDate() === 3 &&
+            now.getHours() === 0 &&
+            now.getMinutes() === 0
+        ) {
+            setSpecialMessage(true); // Trigger the special message
+        }
+    }, []);
 
     return (
         <main className={`${dark ? "bg-[#0f0a1f] text-white" : "bg-[linear-gradient(135deg,#fde2e4,#e9d5ff,#fff3bf)] text-gray-800"} relative min-h-screen overflow-x-hidden`}>
@@ -299,6 +356,29 @@ export default function Home() {
             </div>
 
             {showConfetti && <Confetti recycle={false} numberOfPieces={500} />}
+
+            {/* Special Message Modal */}
+            {specialMessage && (
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5 }}
+                    className="fixed inset-0 flex items-center justify-center bg-black/70 z-50"
+                >
+                    <div className="bg-white p-6 rounded-lg shadow-lg text-center max-w-md">
+                        <h2 className="text-3xl font-bold text-pink-600 mb-4">🎉 Special Midnight Surprise! 🎉</h2>
+                        <p className="text-gray-700 font-mono">
+                            You opened this at the perfect time! Here's to celebrating the most magical moments with you. 💖
+                        </p>
+                        <button
+                            onClick={() => setSpecialMessage(false)}
+                            className="mt-6 bg-pink-500 text-white px-4 py-2 rounded-full shadow hover:bg-pink-600 transition"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </motion.div>
+            )}
 
             {/* 🥳 Hero */}
             <section className="flex flex-col items-center justify-center min-h-screen text-center p-6">
@@ -328,19 +408,25 @@ export default function Home() {
                     Click for Surprise 🎉
                 </motion.button>
 
-                 {/* Cute counters */}
-                <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                {/* Cute counters */}
+                <div className="mt-10 grid grid-cols-1 sm:grid-cols-4 gap-6">
                     <div className="rounded-2xl bg-white/70 backdrop-blur p-6 shadow text-gray-800">
                         <p className="text-sm font-mono">Birthdays together</p>
                         <p className="text-4xl font-bold text-pink-600">{animatedCount}</p>
                     </div>
                     <div className="rounded-2xl bg-white/70 backdrop-blur p-6 shadow text-gray-800">
                         <p className="text-sm font-mono">Days until your next birthday</p>
-                        <p className="text-4xl font-bold text-purple-600">{daysLeft}</p>
+                        <p className="text-4xl font-bold text-purple-600">{timeLeft.totalDays}</p>
                     </div>
                     <div className="rounded-2xl bg-white/70 backdrop-blur p-6 shadow text-gray-800">
                         <p className="text-sm font-mono">Hours until your next birthday</p>
-                        <p className="text-4xl font-bold text-blue-600">{hoursLeft}</p>
+                        <p className="text-4xl font-bold text-blue-600">{timeLeft.remainingHours}</p>
+                    </div>
+                    <div className="rounded-2xl bg-white/70 backdrop-blur p-6 shadow text-gray-800">
+                        <p className="text-sm font-mono">Minutes and Seconds</p>
+                        <p className="text-4xl font-bold text-green-600">
+                            {timeLeft.remainingMinutes}m {timeLeft.remainingSeconds}s
+                        </p>
                     </div>
                 </div>
             </section>
